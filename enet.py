@@ -91,7 +91,7 @@ def unpool(updates, mask, k_size=[1, 2, 2, 1], output_shape=None, scope=''):
         input_shape = tf.shape(updates, out_type=tf.int32)
         #  calculation new shape
         if output_shape is None:
-            output_shape = (input_shape[0], input_shape[1] * ksize[1], input_shape[2] * ksize[2], input_shape[3])
+            output_shape = (input_shape[0], input_shape[1] * k_size[1], input_shape[2] * k_size[2], input_shape[3])
 
         # calculation indices for batch, height, width and feature maps
         one_like_mask = tf.ones_like(mask, dtype=tf.int32)
@@ -422,7 +422,7 @@ def ENet(inputs,
              slim.arg_scope([slim.conv2d, slim.conv2d_transpose], activation_fn=None): 
             #=================INITIAL BLOCK=================
             net = initial_block(inputs, scope='initial_block_1')
-            for i in xrange(2, max(num_initial_blocks, 1) + 1):
+            for i in range(2, max(num_initial_blocks, 1) + 1):
                 net = initial_block(net, scope='initial_block_' + str(i))
 
             #Save for skip connection later
@@ -445,7 +445,7 @@ def ENet(inputs,
                 net, pooling_indices_2, inputs_shape_2 = bottleneck(net, output_depth=128, filter_size=3, downsampling=True, scope='bottleneck2_0')
                 
                 #Repeat the stage two at least twice to get stage 2 and 3:
-                for i in xrange(2, max(stage_two_repeat, 2) + 2):
+                for i in range(2, max(stage_two_repeat, 2) + 2):
                     net = bottleneck(net, output_depth=128, filter_size=3, scope='bottleneck'+str(i)+'_1')
                     net = bottleneck(net, output_depth=128, filter_size=3, dilated=True, dilation_rate=2, scope='bottleneck'+str(i)+'_2')
                     net = bottleneck(net, output_depth=128, filter_size=5, asymmetric=True, scope='bottleneck'+str(i)+'_3')
