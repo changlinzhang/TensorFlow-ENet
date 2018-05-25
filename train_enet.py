@@ -7,6 +7,8 @@ from get_class_weights import ENet_weighing, median_frequency_balancing
 import os
 import time
 import numpy as np
+import matplotlib
+matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 slim = tf.contrib.slim
 
@@ -100,6 +102,7 @@ elif weighting == "ENET":
     print("========= ENet Class Weights =========\n", class_weights)
 
 #============= TRAINING =================
+# dont understand
 def weighted_cross_entropy(onehot_labels, logits, class_weights):
     '''
     A quick wrapper to compute weighted cross entropy. 
@@ -293,7 +296,7 @@ def run():
                     loss, training_accuracy, training_mean_IOU = train_step(sess, train_op, sv.global_step, metrics_op=metrics_op)
 
                     #Check the validation data only at every third of an epoch
-                    if step % (num_steps_per_epoch / 3) == 0:
+                    if step % (int(num_steps_per_epoch / 3)) == 0:
                         for i in range(len(image_val_files) / eval_batch_size):
                             validation_accuracy, validation_mean_IOU = eval_step(sess, metrics_op_val)
 

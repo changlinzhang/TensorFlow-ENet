@@ -6,6 +6,8 @@ from preprocessing import preprocess
 import os
 import time
 import numpy as np
+import matplotlib
+matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 slim = tf.contrib.slim
 
@@ -88,7 +90,7 @@ def run():
             logits, probabilities = ENet(images,
                                          num_classes,
                                          batch_size=batch_size,
-                                         is_training=True,
+                                         is_training=False,
                                          reuse=None,
                                          num_initial_blocks=num_initial_blocks,
                                          stage_two_repeat=stage_two_repeat,
@@ -179,15 +181,24 @@ def run():
                 logging.info('Saving the images now...')
                 predictions_val, annotations_val = sess.run([predictions, annotations])
 
-                for i in range(10):
-                    predicted_annotation = predictions_val[i]
-                    annotation = annotations_val[i]
+                # for i in range(10):
+                #     predicted_annotation = predictions_val[i]
+                #     annotation = annotations_val[i]
+                #
+                #     plt.subplot(1,2,1)
+                #     plt.imshow(predicted_annotation)
+                #     plt.subplot(1,2,2)
+                #     plt.imshow(annotation)
+                #     plt.savefig(photo_dir+"/image_" + str(i))
+                i = 0
+                predicted_annotation = predictions_val[i]
+                annotation = annotations_val[i]
 
-                    plt.subplot(1,2,1)
-                    plt.imshow(predicted_annotation)
-                    plt.subplot(1,2,2)
-                    plt.imshow(annotation)
-                    plt.savefig(photo_dir+"/image_" + str(i))
+                plt.subplot(1,2,1)
+                plt.imshow(predicted_annotation)
+                plt.subplot(1,2,2)
+                plt.imshow(annotation)
+                plt.savefig(photo_dir+"/image_" + str(i))
 
 if __name__ == '__main__':
     run()

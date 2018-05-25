@@ -1,5 +1,7 @@
 import tensorflow as tf
 from tensorflow.contrib.layers.python.layers import initializers
+from tflearn.layers.conv import global_avg_pool
+import numpy as np
 slim = tf.contrib.slim
 
 '''
@@ -8,6 +10,10 @@ ENet: A Deep Neural Network Architecture for Real-Time Semantic Segmentation
 ============================================================================
 Based on the paper: https://arxiv.org/pdf/1606.02147.pdf
 '''
+
+num_classes = 12
+reduction_ratio = 4
+
 @slim.add_arg_scope
 def prelu(x, scope, decoder=False):
     '''
@@ -383,6 +389,36 @@ def bottleneck(inputs,
 
         return net
 
+def Global_Average_Pooling(x):
+    return global_avg_pool(x, name='Global_avg_pooling')
+
+def Average_pooling(x, pool_size=[2,2], stride=2, padding='SAME'):
+    return tf.layers.average_pooling2d(inputs=x, pool_size=pool_size, strides=stride, padding=padding)
+
+def Relu(x):
+    return tf.nn.relu(x)
+
+def Sigmoid(x) :
+    return tf.nn.sigmoid(x)
+
+def Fully_connected(x, units = num_classes, layer_name='fully_connected') :
+    with tf.name_scope(layer_name) :
+        return tf.layers.dense(inputs=x, use_bias=False, units=units)
+
+def squeeze_excitation_layer(input_x, out_dim, ratio, layer_name):
+    with tf.name_scope(layer_name) :
+        squeeze = Global_Average_Pooling(input_x)
+
+        excitation = Fully_connected(squeeze, units=out_dim / ratio, layer_name=layer_name+'_fully_connected1')
+        excitation = Relu(excitation)
+        excitation = Fully_connected(excitation, units=out_dim, layer_name=layer_name+'_fully_connected2')
+        excitation = Sigmoid(excitation)
+
+        excitation = tf.reshape(excitation, [-1, 1, 1, out_dim])
+        scale = input_x * excitation
+
+        return scale
+
 #Now actually start building the network
 def ENet(inputs,
          num_classes,
@@ -422,8 +458,12 @@ def ENet(inputs,
              slim.arg_scope([slim.conv2d, slim.conv2d_transpose], activation_fn=None): 
             #=================INITIAL BLOCK=================
             net = initial_block(inputs, scope='initial_block_1')
+            channel = int(np.shape(net)[-1])
+            net = squeeze_excitation_layer(net, out_dim=channel, ratio=reduction_ratio, layer_name='SE0_' + str(1))
             for i in range(2, max(num_initial_blocks, 1) + 1):
                 net = initial_block(net, scope='initial_block_' + str(i))
+                channel = int(np.shape(net)[-1])
+                net = squeeze_excitation_layer(net, out_dim=channel, ratio=reduction_ratio, layer_name='SE0_' + str(i))
 
             #Save for skip connection later
             if skip_connections:
@@ -431,10 +471,20 @@ def ENet(inputs,
 
             #===================STAGE ONE=======================
             net, pooling_indices_1, inputs_shape_1 = bottleneck(net, output_depth=64, filter_size=3, regularizer_prob=0.01, downsampling=True, scope='bottleneck1_0')
+            channel = int(np.shape(net)[-1])
+            net = squeeze_excitation_layer(net, out_dim=channel, ratio=reduction_ratio, layer_name='SE1_1')
             net = bottleneck(net, output_depth=64, filter_size=3, regularizer_prob=0.01, scope='bottleneck1_1')
+            channel = int(np.shape(net)[-1])
+            net = squeeze_excitation_layer(net, out_dim=channel, ratio=reduction_ratio, layer_name='SE1_2')
             net = bottleneck(net, output_depth=64, filter_size=3, regularizer_prob=0.01, scope='bottleneck1_2')
+            channel = int(np.shape(net)[-1])
+            net = squeeze_excitation_layer(net, out_dim=channel, ratio=reduction_ratio, layer_name='SE1_3')
             net = bottleneck(net, output_depth=64, filter_size=3, regularizer_prob=0.01, scope='bottleneck1_3')
+            channel = int(np.shape(net)[-1])
+            net = squeeze_excitation_layer(net, out_dim=channel, ratio=reduction_ratio, layer_name='SE1_4')
             net = bottleneck(net, output_depth=64, filter_size=3, regularizer_prob=0.01, scope='bottleneck1_4')
+            channel = int(np.shape(net)[-1])
+            net = squeeze_excitation_layer(net, out_dim=channel, ratio=reduction_ratio, layer_name='SE1_5')
 
             #Save for skip connection later
             if skip_connections:
@@ -443,17 +493,43 @@ def ENet(inputs,
             #regularization prob is 0.1 from bottleneck 2.0 onwards
             with slim.arg_scope([bottleneck], regularizer_prob=0.1):
                 net, pooling_indices_2, inputs_shape_2 = bottleneck(net, output_depth=128, filter_size=3, downsampling=True, scope='bottleneck2_0')
-                
+                channel = int(np.shape(net)[-1])
+                net = squeeze_excitation_layer(net, out_dim=channel, ratio=reduction_ratio, layer_name='SE2_0')
+
                 #Repeat the stage two at least twice to get stage 2 and 3:
                 for i in range(2, max(stage_two_repeat, 2) + 2):
                     net = bottleneck(net, output_depth=128, filter_size=3, scope='bottleneck'+str(i)+'_1')
+                    channel = int(np.shape(net)[-1])
+                    net = squeeze_excitation_layer(net, out_dim=channel, ratio=reduction_ratio,
+                                                   layer_name='SE' +str(i)+ '_1')
                     net = bottleneck(net, output_depth=128, filter_size=3, dilated=True, dilation_rate=2, scope='bottleneck'+str(i)+'_2')
+                    channel = int(np.shape(net)[-1])
+                    net = squeeze_excitation_layer(net, out_dim=channel, ratio=reduction_ratio,
+                                                   layer_name='SE' +str(i)+ '_2')
                     net = bottleneck(net, output_depth=128, filter_size=5, asymmetric=True, scope='bottleneck'+str(i)+'_3')
+                    channel = int(np.shape(net)[-1])
+                    net = squeeze_excitation_layer(net, out_dim=channel, ratio=reduction_ratio,
+                                                   layer_name='SE' +str(i)+ '_3')
                     net = bottleneck(net, output_depth=128, filter_size=3, dilated=True, dilation_rate=4, scope='bottleneck'+str(i)+'_4')
+                    channel = int(np.shape(net)[-1])
+                    net = squeeze_excitation_layer(net, out_dim=channel, ratio=reduction_ratio,
+                                                   layer_name='SE' +str(i)+ '_4')
                     net = bottleneck(net, output_depth=128, filter_size=3, scope='bottleneck'+str(i)+'_5')
+                    channel = int(np.shape(net)[-1])
+                    net = squeeze_excitation_layer(net, out_dim=channel, ratio=reduction_ratio,
+                                                   layer_name='SE' +str(i)+ '_5')
                     net = bottleneck(net, output_depth=128, filter_size=3, dilated=True, dilation_rate=8, scope='bottleneck'+str(i)+'_6')
+                    channel = int(np.shape(net)[-1])
+                    net = squeeze_excitation_layer(net, out_dim=channel, ratio=reduction_ratio,
+                                                   layer_name='SE' +str(i)+ '_6')
                     net = bottleneck(net, output_depth=128, filter_size=5, asymmetric=True, scope='bottleneck'+str(i)+'_7')
+                    channel = int(np.shape(net)[-1])
+                    net = squeeze_excitation_layer(net, out_dim=channel, ratio=reduction_ratio,
+                                                   layer_name='SE' +str(i)+ '_7')
                     net = bottleneck(net, output_depth=128, filter_size=3, dilated=True, dilation_rate=16, scope='bottleneck'+str(i)+'_8')
+                    channel = int(np.shape(net)[-1])
+                    net = squeeze_excitation_layer(net, out_dim=channel, ratio=reduction_ratio,
+                                                   layer_name='SE' +str(i)+ '_8')
 
             with slim.arg_scope([bottleneck], regularizer_prob=0.1, decoder=True):
                 #===================STAGE FOUR========================
@@ -462,25 +538,39 @@ def ENet(inputs,
                 #The decoder section, so start to upsample.
                 net = bottleneck(net, output_depth=64, filter_size=3, upsampling=True,
                                  pooling_indices=pooling_indices_2, output_shape=inputs_shape_2, scope=bottleneck_scope_name+'_0')
+                channel = int(np.shape(net)[-1])
+                net = squeeze_excitation_layer(net, out_dim=channel, ratio=reduction_ratio, layer_name='SE' + str(i + 1) + '_0')
 
                 #Perform skip connections here
                 if skip_connections:
                     net = tf.add(net, net_two, name=bottleneck_scope_name+'_skip_connection')
 
                 net = bottleneck(net, output_depth=64, filter_size=3, scope=bottleneck_scope_name+'_1')
+                channel = int(np.shape(net)[-1])
+                net = squeeze_excitation_layer(net, out_dim=channel, ratio=reduction_ratio,
+                                               layer_name='SE' + str(i + 1) + '_1')
                 net = bottleneck(net, output_depth=64, filter_size=3, scope=bottleneck_scope_name+'_2')
+                channel = int(np.shape(net)[-1])
+                net = squeeze_excitation_layer(net, out_dim=channel, ratio=reduction_ratio,
+                                               layer_name='SE' + str(i + 1) + '_2')
 
                 #===================STAGE FIVE========================
                 bottleneck_scope_name = "bottleneck" + str(i + 2)
 
                 net = bottleneck(net, output_depth=16, filter_size=3, upsampling=True,
                                  pooling_indices=pooling_indices_1, output_shape=inputs_shape_1, scope=bottleneck_scope_name+'_0')
+                channel = int(np.shape(net)[-1])
+                net = squeeze_excitation_layer(net, out_dim=channel, ratio=reduction_ratio,
+                                               layer_name='SE' + str(i + 2) + '_0')
 
                 #perform skip connections here
                 if skip_connections:
                     net = tf.add(net, net_one, name=bottleneck_scope_name+'_skip_connection')
 
                 net = bottleneck(net, output_depth=16, filter_size=3, scope=bottleneck_scope_name+'_1')
+                channel = int(np.shape(net)[-1])
+                net = squeeze_excitation_layer(net, out_dim=channel, ratio=reduction_ratio,
+                                           layer_name='SE' + str(i + 2) + '_1')
 
             #=============FINAL CONVOLUTION=============
             logits = slim.conv2d_transpose(net, num_classes, [2,2], stride=2, scope='fullconv')
